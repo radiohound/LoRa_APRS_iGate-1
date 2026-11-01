@@ -15,6 +15,21 @@ namespace EventsFormat {
         return (frameClass >= 0 && frameClass < NCLASSES) ? CLASS_NAMES[frameClass] : "unknown";
     }
 
+    static const char* const OUTCOME_NAMES[] = { "ok", "dropped_no_reference", "parse_failed", "crc_error" };
+
+    int classify(const uint8_t* f, size_t len) {
+        if (len >= 3 && f[0] == 0x3C && f[1] == 0xFF) {
+            switch (f[2]) {
+                case 0x01: return PLAIN;
+                case 0x81: return PPM_FULL;
+                case 0xC1: return PPM_PRIMED;
+                case 0x02: return (len >= 4 && (f[3] & 3) >= 2) ? HYBRID : NATIVE;
+                default:   break;
+            }
+        }
+        return UNKNOWN;
+    }
+
     static void putf(std::string& out, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
     static void putf(std::string& out, const char* fmt, ...) {
         char tmp[160];
@@ -171,6 +186,25 @@ namespace EventsFormat {
         return o;
     }
 
+    std::string rxUndecoded(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
+                            int frameClass, int outcome, int airBytes, const uint8_t* raw, size_t rawLen) {
+        std::string o;
+        o.reserve(600 + 2 * rawLen);
+        putHead(o, "rx", h);
+        putf(o, ",\"reception\":{\"crc_valid\":%s,", outcome == CRC_ERROR ? "false" : "true");
+        putRadio(o, r);
+        putf(o, ",\"local\":{\"rssi_dbm\":%d,\"snr_db\":%.1f,\"freq_error_hz\":%d}}", rssiDbm, snrDb, freqErrorHz);
+        putf(o, ",\"frame\":{\"class\":\"%s\",\"air_bytes\":%d,\"plain_bytes\":0,\"outcome\":\"%s\"",
+             className(frameClass), airBytes, (outcome >= 0 && outcome < 4) ? OUTCOME_NAMES[outcome] : "parse_failed");
+        if (outcome == CRC_ERROR && raw && rawLen > 0) {
+            o += ",\"raw_hex\":\"";
+            for (size_t i = 0; i < rawLen; i++) putf(o, "%02x", raw[i]);
+            o += '"';
+        }
+        o += "},\"packet\":null}";
+        return o;
+    }
+
     std::string tx(const Head& h, const Radio& r, int frameClass, int airBytes, bool ok) {
         std::string o;
         putHead(o, "tx", h);
@@ -180,10 +214,13 @@ namespace EventsFormat {
         return o;
     }
 
-    std::string status(const Head& h, long uptimeS, const Counts& c) {
+    std::string status(const Head& h, long uptimeS, const Counts& c, const Noise& n) {
         std::string o;
         putHead(o, "status", h);
-        putf(o, ",\"uptime_s\":%ld,\"noise_floor\":null,\"received\":{", uptimeS);
+        putf(o, ",\"uptime_s\":%ld", uptimeS);
+        if (n.samples > 0) putf(o, ",\"noise_floor\":{\"avg_dbm\":%.1f,\"min_dbm\":%d,\"max_dbm\":%d,\"samples\":%d}", n.avgDbm, n.minDbm, n.maxDbm, n.samples);
+        else               o += ",\"noise_floor\":null";
+        o += ",\"received\":{";
         for (int i = 0; i < NCLASSES; i++) putf(o, "%s\"%s\":%ld", i ? "," : "", className(i), c.received[i]);
         putf(o, ",\"dropped_no_reference\":%ld,\"parse_failed\":%ld},\"crc_errors\":%ld}", c.droppedNoReference, c.parseFailed, c.crcErrors);
         return o;

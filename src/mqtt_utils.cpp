@@ -42,6 +42,7 @@ namespace MQTT_Utils {
     static const char*      COLLECTOR_HOST      = "mqtt.lora-aprs.org";
     static const uint32_t   STATUS_EVERY_MS     = 60000;
     static const uint32_t   RETRY_EVERY_MS      = 15000;
+    static const int        BROKEN_PER_MIN      = 30;
 
     static String           bootId;
     static uint32_t         sequence            = 0;
@@ -101,14 +102,29 @@ namespace MQTT_Utils {
         publishEvent("tx", EventsFormat::tx(h, radioNow(), frameClass, airBytes, ok));
     }
 
-    void countCrcError() {
-        counts.crcErrors++;
+    void publishUndecoded(int outcome, int frameClass, const uint8_t* raw, size_t rawLen, int rssiDbm, float snrDb, int freqErrorHz) {
+        if (outcome == EventsFormat::CRC_ERROR)                 counts.crcErrors++;
+        else if (outcome == EventsFormat::DROPPED_NO_REFERENCE) counts.droppedNoReference++;
+        else                                                    counts.parseFailed++;
+        if (!Config.mqtt.active || !collectorMode() || !pubSub.connected()) return;
+        if (outcome == EventsFormat::CRC_ERROR) {                       // a burst of collisions must not flood the broker
+            static uint32_t windowStart = 0;
+            static int      inWindow    = 0;
+            if (millis() - windowStart >= 60000) { windowStart = millis(); inWindow = 0; }
+            if (inWindow >= BROKEN_PER_MIN) return;
+            inWindow++;
+        }
+        EventsFormat::Head h;
+        if (!makeHead(h)) return;
+        publishEvent("rx", EventsFormat::rxUndecoded(h, radioNow(), rssiDbm, snrDb, freqErrorHz, frameClass, outcome, (int)rawLen, raw, rawLen));
     }
 
     static void publishStatus() {
         EventsFormat::Head h;
         if (!makeHead(h)) return;
-        publishEvent("status", EventsFormat::status(h, (long)(millis() / 1000), counts));
+        EventsFormat::Noise noise = {};
+        LoRa_Utils::takeNoiseFloor(noise);
+        publishEvent("status", EventsFormat::status(h, (long)(millis() / 1000), counts, noise));
     }
 
     void sendToMqtt(const String& packet) {

@@ -7,6 +7,7 @@
 
 #include <string>
 #include <stdint.h>
+#include <stddef.h>
 
 namespace EventsFormat {
 
@@ -26,6 +27,15 @@ namespace EventsFormat {
         int  cr;                    // coding rate denominator, 5..8
     };
 
+    enum Outcome { OK = 0, DROPPED_NO_REFERENCE, PARSE_FAILED, CRC_ERROR };
+
+    struct Noise {                  // the idle-channel RSSI of the last minute; samples == 0: not measured
+        int    samples;
+        double avgDbm;
+        int    minDbm;
+        int    maxDbm;
+    };
+
     struct Counts {
         long received[NCLASSES];
         long droppedNoReference;
@@ -34,10 +44,14 @@ namespace EventsFormat {
     };
 
     const char* className(int frameClass);
+    int classify(const uint8_t* frame, size_t len);             // the frame class from the first bytes on the air, like Dire Wolf's lorae_classify
     std::string rx(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
                    int frameClass, int airBytes, int plainBytes, const std::string& tnc2);
+    // A frame that was heard but not decoded: outcome DROPPED_NO_REFERENCE, PARSE_FAILED or CRC_ERROR (then the raw bytes go along as hex).
+    std::string rxUndecoded(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
+                            int frameClass, int outcome, int airBytes, const uint8_t* raw, size_t rawLen);
     std::string tx(const Head& h, const Radio& r, int frameClass, int airBytes, bool ok);
-    std::string status(const Head& h, long uptimeS, const Counts& c);
+    std::string status(const Head& h, long uptimeS, const Counts& c, const Noise& n);
 
 }
 

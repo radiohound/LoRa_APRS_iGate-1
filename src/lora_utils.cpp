@@ -110,6 +110,9 @@ namespace LoRa_Utils {
     static bool rxPrimed       = false;
     static bool rxHybrid       = false;
     static size_t rxAirBytes   = 0;
+    static uint8_t  badBuf[256];                // the bytes of the last frame that was heard but not decoded
+    static size_t   badLen     = 0;
+    static int      undecoded  = -1;            // EventsFormat::Outcome of that frame, -1 = none
     static AprsCompress::PacketStore rxStore;
     static AprsCompress::PacketStore txStore;
 
@@ -125,6 +128,8 @@ namespace LoRa_Utils {
         uint8_t buf[256];
         int16_t state = radio.readData(buf, len);
         rxAirBytes = len;
+        undecoded = -1;
+        if (state == RADIOLIB_ERR_CRC_MISMATCH || state == RADIOLIB_ERR_NONE) { memcpy(badBuf, buf, len); badLen = len; }
         rxCompressed = false;
         rxPrimed = false;
         rxHybrid = false;
@@ -132,7 +137,7 @@ namespace LoRa_Utils {
             if (state == RADIOLIB_ERR_NONE && AprsCompress::isCompressedHeader(buf, len)) {
                 uint8_t text[AprsCompress::MAX_TEXT + 1];
                 size_t n = AprsCompress::decodeFrame(buf, len, text, AprsCompress::MAX_TEXT);
-                if (n == 0) return RADIOLIB_ERR_UNKNOWN;
+                if (n == 0) { undecoded = EventsFormat::PARSE_FAILED; return RADIOLIB_ERR_UNKNOWN; }
                 text[n] = 0;
                 packet = "\x3c\xff\x01" + String(reinterpret_cast<char*>(text));
                 rxCompressed = true;
@@ -144,12 +149,14 @@ namespace LoRa_Utils {
                 AprsCompress::PacketStore::Entry* ref = rxStore.findForFrame(id, check);
                 if (ref == nullptr) {
                     Utils::println("Primed frame dropped: no matching reference (station id " + String(id) + ", check " + String(check) + ")");
+                    undecoded = EventsFormat::DROPPED_NO_REFERENCE;
                     return RADIOLIB_ERR_UNKNOWN;
                 }
                 uint8_t text[AprsCompress::MAX_TEXT + 1];
                 size_t n = AprsCompress::decodePrimed(ref->text, ref->len, buf, len, text, AprsCompress::MAX_TEXT);
                 if (n == 0) {
                     Utils::println("Primed frame dropped: did not decode");
+                    undecoded = EventsFormat::PARSE_FAILED;
                     return RADIOLIB_ERR_UNKNOWN;
                 }
                 text[n] = 0;
@@ -165,6 +172,7 @@ namespace LoRa_Utils {
                 int tuples = 0;
                 if (!HYBRID_FRAME::decode(buf, len, tnc2, &tuples)) {
                     Utils::println("LACF frame dropped (" + String(len) + " B)");
+                    undecoded = EventsFormat::PARSE_FAILED;
                     return RADIOLIB_ERR_UNKNOWN;
                 }
                 packet = "\x3c\xff\x01" + String(tnc2.c_str());
@@ -173,6 +181,7 @@ namespace LoRa_Utils {
             } else if (len >= 3 && buf[0] == 0x3C && buf[1] == 0xFF && buf[2] != 0x01) {
                 // A 3C FF frame of a type we do not know (another model version, another format): drop it, never show it as text.
                 Utils::println("Frame with an unknown 3C FF type dropped: " + String(buf[2], HEX));
+                undecoded = EventsFormat::PARSE_FAILED;
                 return RADIOLIB_ERR_UNKNOWN;
             } else {
                 buf[len] = 0;
@@ -508,7 +517,7 @@ namespace LoRa_Utils {
                     snr         = radio.getSNR();
                     freqError   = radio.getFrequencyError();
                     Utils::println(F("CRC error!"));
-                    MQTT_Utils::countCrcError();
+                    MQTT_Utils::publishUndecoded(EventsFormat::CRC_ERROR, EventsFormat::classify(badBuf, badLen), badBuf, badLen, rssi, snr, freqError);
                     if (Config.syslog.active && networkManager->isConnected()) {
                         SYSLOG_Utils::logCRCError(packet, rssi, snr, freqError);
                     }
@@ -516,11 +525,46 @@ namespace LoRa_Utils {
                 } else {
                     Utils::print(F("failed, code "));
                     Utils::println(String(state));
+                    if (undecoded >= 0) {               // heard, but a frame we could not decode
+                        rssi        = radio.getRSSI();
+                        snr         = radio.getSNR();
+                        freqError   = radio.getFrequencyError();
+                        MQTT_Utils::publishUndecoded(undecoded, EventsFormat::classify(badBuf, badLen), badBuf, badLen, rssi, snr, freqError);
+                        undecoded = -1;
+                    }
                     packet = "";
                 }
             }
         }
         return packet;
+    }
+
+    // Idle-channel RSSI for the collector's noise-floor figure: about once a second, power-averaged over the minute (like Dire Wolf's).
+    // Skipped while transmitting, in sleep or eco modes, or with CAD on, so it cannot get in the way of reception.
+    static int      nfSamples = 0, nfMin = 0, nfMax = -200;
+    static double   nfPower   = 0;
+    static uint32_t nfLast    = 0;
+
+    void sampleNoise() {
+        if (millis() - nfLast < 1000) return;
+        nfLast = millis();
+        if (transmitFlag || operationDone || Config.loramodule.cadActive || Config.digi.ecoMode != 0 || !Config.loramodule.rxActive) return;
+        const int r = (int)radio.getRSSI(false);
+        if (r >= 0 || r < -160) return;                 // not a plausible reading
+        nfPower += pow(10.0, r / 10.0);
+        if (nfSamples == 0 || r < nfMin) nfMin = r;
+        if (nfSamples == 0 || r > nfMax) nfMax = r;
+        nfSamples++;
+    }
+
+    bool takeNoiseFloor(EventsFormat::Noise& n) {
+        if (nfSamples == 0) return false;
+        n.samples = nfSamples;
+        n.avgDbm  = 10.0 * log10(nfPower / nfSamples);
+        n.minDbm  = nfMin;
+        n.maxDbm  = nfMax;
+        nfSamples = 0;  nfPower = 0;
+        return true;
     }
 
     void wakeRadio() {

@@ -193,6 +193,7 @@ void loop() {
         NTP_Utils::update();
         TNC_Utils::loop();
         MQTT_Utils::loop();
+        if (Config.mqtt.active && MQTT_Utils::collectorMode()) LoRa_Utils::sampleNoise();     // idle-channel RSSI for the collector's noise floor
 
         Utils::checkDisplayInterval();
         Utils::checkBeaconInterval();

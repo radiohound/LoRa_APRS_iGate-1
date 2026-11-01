@@ -28,7 +28,9 @@ namespace MQTT_Utils {
     bool collectorMode();                                       // the server is mqtt.lora-aprs.org: send event lines (rx, tx, status)
     bool isConnected();
     void publishTx(int frameClass, int airBytes, bool ok);      // collector mode only; frameClass is an EventsFormat::FrameClass
-    void countCrcError();
+    // A frame that was heard but not decoded (EventsFormat::Outcome: CRC_ERROR, DROPPED_NO_REFERENCE, PARSE_FAILED): counted for the status line,
+    // and in collector mode sent as an rx event (broken frames with their bytes, at most 30 a minute).
+    void publishUndecoded(int outcome, int frameClass, const uint8_t* raw, size_t rawLen, int rssi, float snr, int freqError);
     void connect();
     void loop();
     void setup();

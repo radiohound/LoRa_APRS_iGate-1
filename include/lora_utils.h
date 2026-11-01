@@ -20,6 +20,7 @@
 #define LORA_UTILS_H_
 
 #include <Arduino.h>
+#include "events_format.h"
 
 
 namespace LoRa_Utils {
@@ -31,6 +32,8 @@ namespace LoRa_Utils {
     String  receivePacket();
     void    changeFreqTx();
     void    changeFreqRx();
+    void    sampleNoise();                          // idle-channel RSSI, call about once a second (only for the collector feed)
+    bool    takeNoiseFloor(EventsFormat::Noise& n); // the last minute of samples, then starts over; false if there were none
     void    wakeRadio();
     void    sleepRadio();
 

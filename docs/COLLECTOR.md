@@ -17,3 +17,13 @@ Switch MQTT on and save: the user `igate` and password `lora-aprs` are public an
 `sh test/events/run.sh` builds the formatter on the host and feeds its lines to the collector's own parser (`collector.add_event`).
 
 Cost: a few KB of flash for the event code (about 91% of the slot on ttgo-lora32-v21).
+
+## What is sent
+
+* **rx** for every frame heard: RSSI, SNR, frequency error, frame class (`plain`, `ppm_full`, `ppm_primed`, `hybrid`), bytes on air and as plain text, and the decoded packet.
+* **rx with an outcome** for a frame that was heard but not decoded, with `packet: null`: `crc_error` (`crc_valid` false, the bytes as `raw_hex`, at most 30 a minute),
+  `dropped_no_reference` (a primed frame with no earlier full one) or `parse_failed`. The same shape as Dire Wolf's `LORAEVENTS`.
+* **tx** for every frame sent: class, bytes on air, whether the radio reported success.
+* **status** once a minute: uptime, frames received per class, dropped / unparsable / CRC-failed counts, and the **noise floor** (power-averaged idle-channel RSSI,
+  one sample a second, min and max). The noise floor is skipped while transmitting, with CAD on, or in an eco mode; `rx_gain` is not sent (the SX127x has no switchable gain).
+
