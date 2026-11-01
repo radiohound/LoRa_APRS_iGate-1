@@ -56,6 +56,7 @@ namespace MQTT_Utils {
     static uint32_t         loopMaxMs           = 0;               // longest main-loop pass in the current minute
     static uint32_t         reportedLoopMaxMs   = 0;               // ... and in the last full minute (sent in the status line)
     static uint32_t         lastLoopReport      = 0;
+    static uint32_t         passes              = 0;               // main-loop passes in the current minute
     static EventsFormat::Counts counts          = {};
 
     bool collectorMode() {
@@ -232,12 +233,14 @@ namespace MQTT_Utils {
         const uint32_t now = millis();
         if (lastPass != 0 && now - lastPass > loopMaxMs) loopMaxMs = now - lastPass;     // the longest pass of the whole main loop, for the status line
         lastPass = now;
+        passes++;
         if (!Config.mqtt.active) return;
         if (collectorMode() && now - lastLoopReport >= STATUS_EVERY_MS) {
             lastLoopReport = now;
             reportedLoopMaxMs = loopMaxMs;
             loopMaxMs = 0;
-            Serial.println("Main loop: longest pass in the last minute " + String(reportedLoopMaxMs) + " ms");
+            Serial.println("Main loop: longest pass in the last minute " + String(reportedLoopMaxMs) + " ms, " + String(passes) + " passes");
+            passes = 0;
         }
         if (!usable()) return;
         pubSub.loop();
