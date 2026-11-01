@@ -403,7 +403,7 @@ bool Configuration::readFile() {
         mqtt.topic                      = data["mqtt"]["topic"] | "lora-aprs";
         mqtt.username                   = data["mqtt"]["username"] | "";
         mqtt.password                   = data["mqtt"]["password"] | "";
-        mqtt.port                       = data["mqtt"]["port"] | 8883;
+        mqtt.port                       = data["mqtt"]["port"] | 1884;
         mqtt.beaconOverMqtt             = data["mqtt"]["beaconOverMqtt"] | false;
 
         if (data["ota"]["username"].isNull() ||
@@ -565,7 +565,7 @@ void Configuration::setDefaultValues() {
     mqtt.topic                      = "lora-aprs";
     mqtt.username                   = "";
     mqtt.password                   = "";
-    mqtt.port                       = 8883;
+    mqtt.port                       = 1884;
     mqtt.beaconOverMqtt             = false;
 
     ota.username                    = "";

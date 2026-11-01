@@ -97,7 +97,7 @@
         "topic": "lora-aprs",
         "username": "",
         "password": "",
-        "port": 8883,
+        "port": 1884,
         "beaconOverMqtt": false
     },
     "ota": {
