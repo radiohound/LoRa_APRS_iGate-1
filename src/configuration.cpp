@@ -19,6 +19,7 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include "configuration.h"
+#include "config_store.h"
 #include "board_pinout.h"
 #include "display.h"
 
@@ -26,16 +27,38 @@
 bool shouldSleepStop = true;
 
 
+// SPIFFS for ConfigStore (include/config_store.h), and the test of "this text is a complete configuration".
+struct SpiffsFS {
+    bool exists(const char* p)                 { return SPIFFS.exists(p); }
+    bool remove(const char* p)                 { return SPIFFS.remove(p); }
+    bool rename(const char* a, const char* b)  { return SPIFFS.rename(a, b); }
+    bool write(const char* p, const std::string& d) {
+        File f = SPIFFS.open(p, "w");
+        if (!f) return false;
+        const size_t n = f.write(reinterpret_cast<const uint8_t*>(d.data()), d.size());
+        f.close();
+        return n == d.size();
+    }
+    bool read(const char* p, std::string& out) {
+        File f = SPIFFS.open(p, "r");
+        if (!f) return false;
+        out.clear();
+        while (f.available()) out.push_back((char)f.read());
+        f.close();
+        return true;
+    }
+};
+
+static bool configValid(const std::string& text) {
+    JsonDocument d;
+    if (deserializeJson(d, text)) return false;
+    return d["callsign"].is<const char*>() && d["wifi"].is<JsonObject>();
+}
+
 bool Configuration::writeFile() {
     Serial.println("Saving configuration...");
 
     JsonDocument data;
-    File configFile = SPIFFS.open("/igate_conf.json", "w");
-
-    if (!configFile) {
-        Serial.println("Error: Could not open config file for writing");
-        return false;
-    }
     try {
 
         if (wifiAPs[0].ssid != "") { // We don't want to save Auto AP empty SSID
@@ -186,27 +209,37 @@ bool Configuration::writeFile() {
 
         data["other"]["rememberStationTime"]        = rememberStationTime;
 
-        serializeJson(data, configFile);
-        configFile.close();
-        return true;
+        String text;
+        serializeJson(data, text);
+        SpiffsFS fs;
+        const bool saved = ConfigStore::commit(fs, std::string(text.c_str(), text.length()), configValid);
+        if (!saved) Serial.println("Error: the configuration could not be saved; the file that was there is unchanged");
+        return saved;
     } catch (...) {
         Serial.println("Error: Exception occurred while saving config");
-        configFile.close();
         return false;
     }
 }
 
 bool Configuration::readFile() {
     Serial.println("Reading config..");
-    File configFile = SPIFFS.open("/igate_conf.json", "r");
-
-    if (configFile) {
+    SpiffsFS fs;
+    std::string text;
+    bool anyFile = false;
+    const ConfigStore::Source source = ConfigStore::load(fs, configValid, text, anyFile);
+    if (source == ConfigStore::NONE) {
+        Serial.println(anyFile ? "Config files exist but none is complete: left untouched" : "Config file not found");
+        return false;
+    }
+    {
         bool needsRewrite = false;
-        JsonDocument data;
-        DeserializationError error = deserializeJson(data, configFile);
-        if (error) {
-            Serial.println("Failed to read file, using default configuration");
+        if (source != ConfigStore::FROM_CURRENT) {
+            Serial.println(source == ConfigStore::FROM_TMP ? "Config: the main file was missing or damaged, using the finished temporary copy"
+                                                           : "Config: the main file was missing or damaged, using the .bak copy");
+            needsRewrite = true;                                         // write the main file again from what was read
         }
+        JsonDocument data;
+        deserializeJson(data, text);                                     // cannot fail: configValid accepted this text
 
         JsonArray WiFiArray = data["wifi"]["AP"];
         for (int i = 0; i < WiFiArray.size(); i++) {
@@ -433,19 +466,16 @@ bool Configuration::readFile() {
 
             wifiAPs.push_back(wifiap);
         }
-        configFile.close();
-
         if (needsRewrite) {
             Serial.println("Config JSON incomplete, rewriting...");
-            writeFile();
-            delay(1000);
-            ESP.restart();
+            if (writeFile()) {
+                delay(1000);
+                ESP.restart();
+            }
+            Serial.println("Config could not be rewritten: continuing with the values in memory (no restart)");     // a failing flash must not cause a restart loop
         }
         Serial.println("Config read successfuly");
         return true;
-    } else {
-        Serial.println("Config file not found");
-        return false;
     }
 }
 
@@ -587,13 +617,19 @@ void Configuration::setup() {
     }
     Serial.println("SPIFFS Ready");
 
-    if (!SPIFFS.exists("/igate_conf.json")) {
+    const bool anyFile = SPIFFS.exists(ConfigStore::CURRENT) || SPIFFS.exists(ConfigStore::TMP) || SPIFFS.exists(ConfigStore::BAK);
+    if (!anyFile) {
         Serial.println("Config not found, creating default...");
         setDefaultValues();
-        writeFile();
-        delay(1000);
-        ESP.restart();
+        if (writeFile()) {
+            delay(1000);
+            ESP.restart();
+        }
+        Serial.println("Default config could not be saved: running on the values in memory");
+    } else if (!readFile()) {
+        // Files are there but none is complete (a save was cut short, for example). They are NOT replaced by defaults: that is what used to erase the
+        // callsign and the WiFi networks. The board runs on defaults in memory (it opens its own access point), and the next Save writes a good file.
+        Serial.println("Config files are damaged: running on default values; the files are left as they are");
+        setDefaultValues();
     }
-
-    readFile();
 }
