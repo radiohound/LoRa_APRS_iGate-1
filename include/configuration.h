@@ -90,6 +90,7 @@ public:
     bool    cadActive;
     bool    compressTx;     // experimental: send order-3 compressed frames (receivers always decode them)
     int     compressFullEvery; // with compressTx: a full compressed frame at least every Nth packet per station; the rest are primed (1 = never primed)
+    int     txFormat;       // Tx frame format: 0 Text (standard), 3 Hybrid RXT Compression (LACF); other values read as 0
 };
 
 class Display {

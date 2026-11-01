@@ -142,6 +142,7 @@ function loadSettings(settings) {
     document.getElementById("digi.mode").value                          = settings.digi.mode;
     document.getElementById("digi.ecoMode").value                       = settings.digi.ecoMode;
     document.getElementById("digi.backupDigiMode").checked              = settings.digi.backupDigiMode;
+    document.getElementById("lora.txFormat").value                      = settings.lora.txFormat;
 
     // LoRa
     document.getElementById("lora.rxActive").checked                    = settings.lora.rxActive;

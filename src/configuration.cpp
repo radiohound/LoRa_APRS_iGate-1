@@ -110,6 +110,7 @@ bool Configuration::writeFile() {
         data["lora"]["cadActive"]                   = loramodule.cadActive;
         data["lora"]["compressTx"]                  = loramodule.compressTx;
         data["lora"]["compressFullEvery"]           = loramodule.compressFullEvery;
+        data["lora"]["txFormat"]                    = loramodule.txFormat;
 
         int rxSpreadingFactor = loramodule.rxSpreadingFactor;
         int txSpreadingFactor = loramodule.txSpreadingFactor;
@@ -310,7 +311,8 @@ bool Configuration::readFile() {
             data["lora"]["power"].isNull() ||
             data["lora"]["cadActive"].isNull() ||
             data["lora"]["compressTx"].isNull() ||
-            data["lora"]["compressFullEvery"].isNull()) needsRewrite = true;
+            data["lora"]["compressFullEvery"].isNull() ||
+            data["lora"]["txFormat"].isNull()) needsRewrite = true;
         loramodule.rxActive             = data["lora"]["rxActive"] | true;
         loramodule.rxFreq               = data["lora"]["rxFreq"] | 433775000;
         loramodule.rxSpreadingFactor    = data["lora"]["rxSpreadingFactor"] | 12;
@@ -325,6 +327,8 @@ bool Configuration::readFile() {
         loramodule.cadActive            = data["lora"]["cadActive"] | true;
         loramodule.compressTx           = data["lora"]["compressTx"] | false;
         loramodule.compressFullEvery    = data["lora"]["compressFullEvery"] | 2;
+        loramodule.txFormat             = data["lora"]["txFormat"] | 0;
+        if (loramodule.txFormat != 0 && loramodule.txFormat != 3) loramodule.txFormat = 0;
 
         if (data["display"]["alwaysOn"].isNull() ||
             data["display"]["timeout"].isNull() ||
@@ -521,6 +525,7 @@ void Configuration::setDefaultValues() {
     loramodule.cadActive            = true;
     loramodule.compressTx           = false;
     loramodule.compressFullEvery    = 2;
+    loramodule.txFormat             = 0;
 
     display.alwaysOn                = true;
     display.timeout                 = 4;

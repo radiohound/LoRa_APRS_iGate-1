@@ -1,0 +1,19 @@
+{
+  "name": "HybridFrame",
+  "version": "0.1.0",
+  "description": "APRS hybrid B frame (spec 11): native frame with a PPM-coded content field",
+  "build": {
+    "srcFilter": [
+      "+<hb.c>",
+      "+<hbi.c>",
+      "+<hbc.c>",
+      "+<hybrid_frame.cpp>"
+    ],
+    "flags": [
+      "-DHB_FAST",
+      "-O2",
+      "-Wno-misleading-indentation",
+      "-Wno-unused-function"
+    ]
+  }
+}

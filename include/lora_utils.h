@@ -38,6 +38,7 @@ namespace LoRa_Utils {
     bool    lastRxWasPrimed();              // the last received frame was a primed frame
     void    setForceCompress(int mode);     // -1 = follow lora.compressTx, 0 = plain, 1 = compressed
     bool    lastRxWasCompressed();
+    bool    lastRxWasHybrid();              // the last received frame was an LACF frame (Hybrid RXT Compression)
     size_t  lastRxAirBytes();
 
 }

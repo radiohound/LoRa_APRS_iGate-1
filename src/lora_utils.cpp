@@ -31,6 +31,7 @@
 #include "thermal_utils.h"
 #include "AprsCompress.h"
 #include "AprsCompressStore.h"
+#include "hybrid_frame.h"
 
 
 extern Configuration    Config;
@@ -105,12 +106,14 @@ namespace LoRa_Utils {
     static int  forceCompress  = -1;        // -1 = follow Config.loramodule.compressTx
     static bool rxCompressed   = false;
     static bool rxPrimed       = false;
+    static bool rxHybrid       = false;
     static size_t rxAirBytes   = 0;
     static AprsCompress::PacketStore rxStore;
     static AprsCompress::PacketStore txStore;
 
     void setForceCompress(int mode) { forceCompress = mode; }
     bool lastRxWasCompressed()      { return rxCompressed; }
+    bool lastRxWasHybrid()          { return rxHybrid; }
     bool lastRxWasPrimed()          { return rxPrimed; }
     size_t lastRxAirBytes()         { return rxAirBytes; }
 
@@ -122,6 +125,7 @@ namespace LoRa_Utils {
         rxAirBytes = len;
         rxCompressed = false;
         rxPrimed = false;
+        rxHybrid = false;
         if (state == RADIOLIB_ERR_NONE || state == RADIOLIB_ERR_CRC_MISMATCH || state == RADIOLIB_ERR_LORA_HEADER_DAMAGED) {
             if (state == RADIOLIB_ERR_NONE && AprsCompress::isCompressedHeader(buf, len)) {
                 uint8_t text[AprsCompress::MAX_TEXT + 1];
@@ -152,6 +156,18 @@ namespace LoRa_Utils {
                 rxPrimed = true;
                 rxStore.put(text, n, false);
                 Utils::println("Primed frame: " + String(len) + " B on air, " + String(n + 3) + " B expanded");
+            } else if (state == RADIOLIB_ERR_NONE && HYBRID_FRAME::isHybrid(buf, len)) {
+                // LACF, the LoRa APRS Compact Frame (3C FF 02, kind 2 or 3): expanded back to "\x3c\xff\x01" + text like the other compressed frames.
+                // An RXT block it may carry is counted and dropped: this firmware has no RXT.
+                std::string tnc2;
+                int tuples = 0;
+                if (!HYBRID_FRAME::decode(buf, len, tnc2, &tuples)) {
+                    Utils::println("LACF frame dropped (" + String(len) + " B)");
+                    return RADIOLIB_ERR_UNKNOWN;
+                }
+                packet = "\x3c\xff\x01" + String(tnc2.c_str());
+                rxHybrid = true;
+                Utils::println("LACF frame: " + String(len) + " B on air, " + String(tnc2.size() + 3) + " B expanded" + (tuples > 0 ? " (RXT block not carried on)" : ""));
             } else if (len >= 3 && buf[0] == 0x3C && buf[1] == 0xFF && buf[2] != 0x01) {
                 // A 3C FF frame of a type we do not know (another model version, another format): drop it, never show it as text.
                 Utils::println("Frame with an unknown 3C FF type dropped: " + String(buf[2], HEX));
@@ -170,6 +186,14 @@ namespace LoRa_Utils {
     // earlier packet from the same source and fewer than compressFullEvery - 1 primed frames have gone since
     // the last full one), a full compressed frame, or the plain frame.
     static int16_t transmitText(const String& text) {
+        if (Config.loramodule.txFormat == 3) {                     // Tx frame format: Hybrid RXT Compression (LACF)
+            std::vector<uint8_t> lacf;
+            if (HYBRID_FRAME::encode(std::string(text.c_str(), text.length()), lacf)) {
+                Utils::println("LACF frame: " + String(lacf.size()) + " B instead of " + String(text.length() + 3) + " B");
+                return radio.transmit(lacf.data(), lacf.size());
+            }
+            Utils::println("LACF: sent as text, the packet cannot be encoded");
+        }
         bool useCompression = (forceCompress < 0) ? Config.loramodule.compressTx : (forceCompress == 1);
         const uint8_t* t = reinterpret_cast<const uint8_t*>(text.c_str());
         size_t tl = text.length();
@@ -345,6 +369,11 @@ namespace LoRa_Utils {
 
     void sendNewPacket(const String& newPacket) {
         if (!Config.loramodule.txActive) return;
+        if (!HYBRID_FRAME::pathOk(std::string(newPacket.c_str(), newPacket.length()))) {
+            // A WIDEn-N that breaks the APRS rule (n 1 to 7, N 1 to n) is not repeated on RF in any form (LACF, spec 11, "Non-compliant WIDE paths").
+            Utils::println("Packet dropped, its path holds a WIDEn-N that breaks the APRS rule: " + newPacket);
+            return;
+        }
         #ifdef FAN_CTRL_PIN
             if (THERMAL_Utils::isTxBlocked()) {
                 Utils::println("Thermal: Tx blocked (over-temperature), packet dropped: " + newPacket);

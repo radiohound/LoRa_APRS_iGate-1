@@ -53,7 +53,8 @@
         "power": 20,
         "cadActive": true,
         "compressTx": false,
-        "compressFullEvery": 2
+        "compressFullEvery": 2,
+        "txFormat": 0
     },
     "display": {
         "alwaysOn": true,

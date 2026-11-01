@@ -1083,6 +1083,14 @@ body{background:var(--msh-bg);color:var(--msh-text);font-family:"Inter",system-u
                                             >
                                         </div>
                                     </div>
+                    <div class="col-12 mt-3">
+                        <label for="lora.txFormat" class="form-label">Tx frame format</label>
+                        <select class="form-select form-select" name="lora.txFormat" id="lora.txFormat">
+                            <option value="0" selected>Text (standard)</option>
+                            <option value="3">Hybrid RXT Compression (LACF, test only)</option>
+                        </select>
+                        <div class="form-text">Hybrid RXT Compression (LACF) frames are ignored by other firmware.</div>
+                    </div>
                                 </div>
                             </div>
                         </div>
