@@ -132,6 +132,16 @@ namespace EventsFormat {
         return startsWithCi(s, "WIDE") || startsWithCi(s, "RELAY") || startsWithCi(s, "TRACE") || startsWithCi(s, "ECHO") || startsWithCi(s, "TCPIP");
     }
 
+    bool privatePath(const std::string& tnc2) {
+        Header p;
+        if (!parseHeader(tnc2, p)) return false;
+        for (const std::string& el : p.path) {
+            std::string bare = stripStar(el);
+            if (bare.size() == 6 && (startsWithCi(bare, "RFONLY") || startsWithCi(bare, "NOGATE"))) return true;
+        }
+        return false;
+    }
+
     std::string rx(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
                    int frameClass, int airBytes, int plainBytes, const std::string& tnc2) {
         std::string o;

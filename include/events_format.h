@@ -44,6 +44,8 @@ namespace EventsFormat {
     };
 
     const char* className(int frameClass);
+    // True if the packet's path holds RFONLY or NOGATE: its sender asked for it to stay off the internet, so it must not go to the collector.
+    bool privatePath(const std::string& tnc2);
     int classify(const uint8_t* frame, size_t len);             // the frame class from the first bytes on the air, like Dire Wolf's lorae_classify
     std::string rx(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
                    int frameClass, int airBytes, int plainBytes, const std::string& tnc2);

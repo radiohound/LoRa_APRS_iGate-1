@@ -2,7 +2,20 @@
 #include <stdio.h>
 #include "events_format.h"
 
-int main() {
+static int check_private() {
+    int bad = 0;
+    struct { const char* t; bool want; } c[] = {
+        { "K6ATV-4>APLRT1,RFONLY:=x", true },        { "K6ATV-4>APLRT1,NOGATE:=x", true },
+        { "K6ATV-4>APLRT1,WIDE1-1,RFONLY*:=x", true }, { "K6ATV-4>APLRT1,nogate:=x", true },
+        { "K6ATV-4>APLRT1,WIDE1-1:=x", false },      { "K6ATV-4>APLRT1:=NOGATE in the text", false },
+        { "K6ATV-4>APLRT1,RFONLYX:=x", false },      { "garbage", false },
+    };
+    for (auto& k : c) if (EventsFormat::privatePath(k.t) != k.want) { printf("privatePath wrong for: %s\n", k.t); bad++; }
+    return bad;
+}
+
+int main(int argc, char** argv) {
+    if (argc > 1) return check_private();
     EventsFormat::Head h = { "a1b2c3d4", 1, 1793545200123LL, "K6ATV-14" };
     EventsFormat::Radio r = { 433775000, 125000, 12, 5 };
     EventsFormat::Counts c = { { 5, 2, 1, 0, 0, 3 }, 0, 0, 4 };

@@ -91,6 +91,7 @@ namespace MQTT_Utils {
         EventsFormat::Head h;
         if (!makeHead(h)) return;
         const String tnc2 = packet.substring(3);
+        if (EventsFormat::privatePath(std::string(tnc2.c_str(), tnc2.length()))) return;     // RFONLY / NOGATE: counted above, never sent
         publishEvent("rx", EventsFormat::rx(h, radioNow(), rssi, snr, freqError, cls, (int)LoRa_Utils::lastRxAirBytes(), (int)packet.length(),
                                             std::string(tnc2.c_str(), tnc2.length())));
     }

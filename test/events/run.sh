@@ -7,5 +7,6 @@ root=$(cd "$here/../.." && pwd)
 collector=${1:-$HOME/lora-compress/lora-aprs-collector}
 out=${TMPDIR:-/tmp}/events_test.$$
 c++ -std=c++17 -Wall -Wextra -I"$root/include" -o "$out" "$here/events_test.cpp" "$root/src/events_format.cpp"
+"$out" private || { echo "privatePath test failed"; exit 1; }
 "$out" | python3 -I "$here/check.py" "$collector"
 rm -f "$out"
