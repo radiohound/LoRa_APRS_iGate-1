@@ -132,14 +132,15 @@ namespace EventsFormat {
         return startsWithCi(s, "WIDE") || startsWithCi(s, "RELAY") || startsWithCi(s, "TRACE") || startsWithCi(s, "ECHO") || startsWithCi(s, "TCPIP");
     }
 
+    // The same rule the iGate applies before it uploads to APRS-IS (aprs_is_utils.cpp): the words RFONLY or NOGATE anywhere in the header, in any case,
+    // so RFONLY-1 or a lower-case nogate also count. The header is everything before the first ':'. A packet with no ':' or no '>' cannot be read,
+    // so it is treated as private too: when in doubt, nothing is published.
     bool privatePath(const std::string& tnc2) {
-        Header p;
-        if (!parseHeader(tnc2, p)) return false;
-        for (const std::string& el : p.path) {
-            std::string bare = stripStar(el);
-            if (bare.size() == 6 && (startsWithCi(bare, "RFONLY") || startsWithCi(bare, "NOGATE"))) return true;
-        }
-        return false;
+        size_t colon = tnc2.find(':');
+        if (colon == std::string::npos || tnc2.find('>') == std::string::npos || tnc2.find('>') > colon) return true;
+        std::string head = tnc2.substr(0, colon);
+        for (char& c : head) if (c >= 'a' && c <= 'z') c -= 32;
+        return head.find("RFONLY") != std::string::npos || head.find("NOGATE") != std::string::npos;
     }
 
     std::string rx(const Head& h, const Radio& r, int rssiDbm, float snrDb, int freqErrorHz,
@@ -162,13 +163,11 @@ namespace EventsFormat {
             o += ",\"source\":";       putString(o, p.src);
             o += ",\"destination\":";  putString(o, p.dst);
             o += ",\"path\":[";
-            bool priv = false;
+            const bool priv = privatePath(tnc2);
             int last = -1;
             for (size_t i = 0; i < p.path.size(); i++) {
                 if (i) o += ',';
                 putString(o, p.path[i]);
-                std::string bare = stripStar(p.path[i]);
-                if (bare.size() == 6 && (startsWithCi(bare, "RFONLY") || startsWithCi(bare, "NOGATE"))) priv = true;
                 if (!p.path[i].empty() && p.path[i].back() == '*') last = (int)i;
             }
             o += ']';

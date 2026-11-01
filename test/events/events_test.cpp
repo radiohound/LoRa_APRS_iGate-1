@@ -4,13 +4,21 @@
 
 static int check_private() {
     int bad = 0;
+    // The rule: RFONLY or NOGATE anywhere before the first ':', in any case; a header that cannot be read counts as private.
     struct { const char* t; bool want; } c[] = {
-        { "K6ATV-4>APLRT1,RFONLY:=x", true },        { "K6ATV-4>APLRT1,NOGATE:=x", true },
-        { "K6ATV-4>APLRT1,WIDE1-1,RFONLY*:=x", true }, { "K6ATV-4>APLRT1,nogate:=x", true },
-        { "K6ATV-4>APLRT1,WIDE1-1:=x", false },      { "K6ATV-4>APLRT1:=NOGATE in the text", false },
-        { "K6ATV-4>APLRT1,RFONLYX:=x", false },      { "garbage", false },
+        { "K6ATV-4>APLRT1,RFONLY:=x", true },            { "K6ATV-4>APLRT1,NOGATE:=x", true },
+        { "K6ATV-4>APLRT1,WIDE1-1,RFONLY*:=x", true },   { "K6ATV-4>APLRT1,nogate:=x", true },
+        { "K6ATV-4>APLRT1,RFONLY-1:=x", true },          { "K6ATV-4>APLRT1,NOGATE-2*:=x", true },       // the iGate's own gating rule matches these too
+        { "K6ATV-4>APLRT1,RFONLYX:=x", true },
+        { "K6ATV-4>APLRT1,WIDE1-1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,RFONLY,W13,W14,W15:=x", true },       // far down a long path
+        { "K6ATV-4>APLRT1,WIDE1-1:=x", false },          { "K6ATV-4>APLRT1:=NOGATE in the text", false },     // only the header counts
+        { "K6ATV-4>APLRT1:=hello: RFONLY", false },
+        { "garbage", true },                              { "no colon K6ATV-4>APLRT1,WIDE1-1", true },
+        { "K6ATV-4 APLRT1,WIDE1-1:=x", true },            { ":K6ATV-4>APLRT1,WIDE1-1", true },                 // no '>' before the ':'
+        { "", true },
     };
     for (auto& k : c) if (EventsFormat::privatePath(k.t) != k.want) { printf("privatePath wrong for: %s\n", k.t); bad++; }
+    printf("privatePath: %d cases, %d wrong\n", (int)(sizeof c / sizeof c[0]), bad);
     return bad;
 }
 

@@ -117,7 +117,10 @@ namespace MQTT_Utils {
         }
         EventsFormat::Head h;
         if (!makeHead(h)) return;
-        publishEvent("rx", EventsFormat::rxUndecoded(h, radioNow(), rssiDbm, snrDb, freqErrorHz, frameClass, outcome, (int)rawLen, raw, rawLen));
+        // The bytes of a frame that failed its CRC are NOT sent: they are damaged, so a private packet (RFONLY or NOGATE in its path) can no longer be recognised
+        // as one, and would be published in readable form. What is sent: the class guessed from the first bytes, the length, RSSI, SNR and the frequency error.
+        (void)raw;
+        publishEvent("rx", EventsFormat::rxUndecoded(h, radioNow(), rssiDbm, snrDb, freqErrorHz, frameClass, outcome, (int)rawLen, nullptr, 0));
     }
 
     static void publishStatus() {
