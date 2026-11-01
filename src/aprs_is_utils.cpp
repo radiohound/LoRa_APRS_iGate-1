@@ -360,7 +360,9 @@ namespace APRS_IS_Utils {
         #else
             if (aprsIsClient.connected()) {
                 if (aprsIsClient.available()) {
-                    String aprsisPacket = aprsIsClient.readStringUntil('\r');
+                    // APRS-IS lines end with "\r\n". Reading up to '\r' left the '\n' in the buffer, and the next call then waited the stream's default 1 s
+                    // for another '\r' before returning: the main loop (and so the radio) stalled for a second after every line from the server. Read up to '\n'; trim() drops the '\r'.
+                    String aprsisPacket = aprsIsClient.readStringUntil('\n');
                     aprsisPacket.trim();    // Serial.println(aprsisPacket);
                     processAPRSISPacket(aprsisPacket);
                 }
