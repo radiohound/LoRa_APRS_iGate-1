@@ -1639,7 +1639,7 @@ body{background:var(--msh-bg);color:var(--msh-text);font-family:"Inter",system-u
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.5 2.5 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5"/></svg>
                                     MQTT
                                 </h5>
-                                <small>Set your MQTT server</small>
+                                <small>Set your MQTT server. The default, <strong>mqtt.lora-aprs.org</strong>, is the LoRa APRS development collector: switch MQTT on, type your password and save. It sends frame statistics (what was heard and sent, never your settings) under <strong>lora-aprs/&lt;your callsign&gt;</strong> over TLS; the user name is your callsign when left empty.</small>
                             </div>
                             <div class="col-lg-9 col-sm-12">
                                 <div class="row">
@@ -1744,7 +1744,7 @@ body{background:var(--msh-bg);color:var(--msh-text);font-family:"Inter",system-u
                                         <label
                                             for="mqtt.port"
                                             class="form-label"
-                                            >Port <small>(Default is <strong>1883</strong>)</small></label
+                                            >Port <small>(Default is <strong>8883</strong>; the collector uses TLS)</small></label
                                         >
                                         <div class="input-group">
                                             <input
@@ -1752,7 +1752,7 @@ body{background:var(--msh-bg);color:var(--msh-text);font-family:"Inter",system-u
                                                 name="mqtt.port"
                                                 id="mqtt.port"
                                                 class="form-control"
-                                                placeholder="1883"
+                                                placeholder="8883"
                                                 required=""
                                                 step="1"
                                                 min="0"

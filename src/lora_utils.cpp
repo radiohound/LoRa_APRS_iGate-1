@@ -32,6 +32,8 @@
 #include "AprsCompress.h"
 #include "AprsCompressStore.h"
 #include "hybrid_frame.h"
+#include "events_format.h"
+#include "mqtt_utils.h"
 
 
 extern Configuration    Config;
@@ -185,11 +187,18 @@ namespace LoRa_Utils {
     // Sends one packet. When compression is on it sends the smallest of: a primed frame (only if we sent an
     // earlier packet from the same source and fewer than compressFullEvery - 1 primed frames have gone since
     // the last full one), a full compressed frame, or the plain frame.
+    static int  txFrameClass = EventsFormat::PLAIN;     // what the last transmitText sent, for the collector's tx event
+    static int  txAirBytes   = 0;
+
     static int16_t transmitText(const String& text) {
+        txFrameClass = EventsFormat::PLAIN;
+        txAirBytes   = text.length() + 3;
         if (Config.loramodule.txFormat == 3) {                     // Tx frame format: Hybrid RXT Compression (LACF)
             std::vector<uint8_t> lacf;
             if (HYBRID_FRAME::encode(std::string(text.c_str(), text.length()), lacf)) {
                 Utils::println("LACF frame: " + String(lacf.size()) + " B instead of " + String(text.length() + 3) + " B");
+                txFrameClass = EventsFormat::HYBRID;
+                txAirBytes   = lacf.size();
                 return radio.transmit(lacf.data(), lacf.size());
             }
             Utils::println("LACF: sent as text, the packet cannot be encoded");
@@ -208,11 +217,15 @@ namespace LoRa_Utils {
             if (np > 0 && (nf == 0 || np < nf)) {
                 Utils::println("Primed frame: " + String(np) + " B instead of " + String(tl + 3) + " B");
                 txStore.put(t, tl, false);
+                txFrameClass = EventsFormat::PPM_PRIMED;
+                txAirBytes   = np;
                 return radio.transmit(primed, np);
             }
             txStore.put(t, tl, true);
             if (nf > 0) {
                 Utils::println("Compressed frame: " + String(nf) + " B instead of " + String(tl + 3) + " B");
+                txFrameClass = EventsFormat::PPM_FULL;
+                txAirBytes   = nf;
                 return radio.transmit(full, nf);
             }
         }
@@ -411,6 +424,7 @@ namespace LoRa_Utils {
                 THERMAL_Utils::onTxEnd();
             #endif
             transmitFlag = true;
+            if (Config.mqtt.active) MQTT_Utils::publishTx(txFrameClass, txAirBytes, state == RADIOLIB_ERR_NONE);
             if (state == RADIOLIB_ERR_NONE) {
                 if (Config.syslog.active && networkManager->isConnected()) {
                     SYSLOG_Utils::logLoRaTx(newPacket);
@@ -494,6 +508,7 @@ namespace LoRa_Utils {
                     snr         = radio.getSNR();
                     freqError   = radio.getFrequencyError();
                     Utils::println(F("CRC error!"));
+                    MQTT_Utils::countCrcError();
                     if (Config.syslog.active && networkManager->isConnected()) {
                         SYSLOG_Utils::logCRCError(packet, rssi, snr, freqError);
                     }

@@ -399,11 +399,11 @@ bool Configuration::readFile() {
             data["mqtt"]["port"].isNull() ||
             data["mqtt"]["beaconOverMqtt"].isNull()) needsRewrite = true;
         mqtt.active                     = data["mqtt"]["active"] | false;
-        mqtt.server                     = data["mqtt"]["server"] | "";
-        mqtt.topic                      = data["mqtt"]["topic"] | "aprs-igate";
+        mqtt.server                     = data["mqtt"]["server"] | "mqtt.lora-aprs.org";
+        mqtt.topic                      = data["mqtt"]["topic"] | "lora-aprs";
         mqtt.username                   = data["mqtt"]["username"] | "";
         mqtt.password                   = data["mqtt"]["password"] | "";
-        mqtt.port                       = data["mqtt"]["port"] | 1883;
+        mqtt.port                       = data["mqtt"]["port"] | 8883;
         mqtt.beaconOverMqtt             = data["mqtt"]["beaconOverMqtt"] | false;
 
         if (data["ota"]["username"].isNull() ||
@@ -561,11 +561,11 @@ void Configuration::setDefaultValues() {
     tnc.kissProtocol                = true;
 
     mqtt.active                     = false;
-    mqtt.server                     = "";
-    mqtt.topic                      = "aprs-igate";
+    mqtt.server                     = "mqtt.lora-aprs.org";
+    mqtt.topic                      = "lora-aprs";
     mqtt.username                   = "";
     mqtt.password                   = "";
-    mqtt.port                       = 1883;
+    mqtt.port                       = 8883;
     mqtt.beaconOverMqtt             = false;
 
     ota.username                    = "";

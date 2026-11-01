@@ -25,6 +25,10 @@
 namespace MQTT_Utils {
 
     void sendToMqtt(const String& packet);
+    bool collectorMode();                                       // the server is mqtt.lora-aprs.org: send event lines (rx, tx, status)
+    bool isConnected();
+    void publishTx(int frameClass, int airBytes, bool ok);      // collector mode only; frameClass is an EventsFormat::FrameClass
+    void countCrcError();
     void connect();
     void loop();
     void setup();

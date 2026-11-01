@@ -93,11 +93,11 @@
     },
     "mqtt": {
         "active": false,
-        "server": "",
-        "topic": "",
+        "server": "mqtt.lora-aprs.org",
+        "topic": "lora-aprs",
         "username": "",
         "password": "",
-        "port": 1883,
+        "port": 8883,
         "beaconOverMqtt": false
     },
     "ota": {
