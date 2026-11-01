@@ -540,7 +540,7 @@ namespace LoRa_Utils {
     }
 
     // Idle-channel RSSI for the collector's noise-floor figure: about once a second, power-averaged over the minute (like Dire Wolf's).
-    // Skipped while transmitting, in sleep or eco modes, or with CAD on, so it cannot get in the way of reception.
+    // Skipped while transmitting and in eco modes (the radio sleeps). CAD (on by default) does not matter: it only runs inside sendNewPacket, in this same loop.
     static int      nfSamples = 0, nfMin = 0, nfMax = -200;
     static double   nfPower   = 0;
     static uint32_t nfLast    = 0;
@@ -548,7 +548,7 @@ namespace LoRa_Utils {
     void sampleNoise() {
         if (millis() - nfLast < 1000) return;
         nfLast = millis();
-        if (transmitFlag || operationDone || Config.loramodule.cadActive || Config.digi.ecoMode != 0 || !Config.loramodule.rxActive) return;
+        if (transmitFlag || operationDone || Config.digi.ecoMode != 0 || !Config.loramodule.rxActive) return;
         const int r = (int)radio.getRSSI(false);
         if (r >= 0 || r < -160) return;                 // not a plausible reading
         nfPower += pow(10.0, r / 10.0);

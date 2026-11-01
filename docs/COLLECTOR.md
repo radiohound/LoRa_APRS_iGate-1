@@ -25,5 +25,5 @@ Cost: a few KB of flash for the event code (about 91% of the slot on ttgo-lora32
   `dropped_no_reference` (a primed frame with no earlier full one) or `parse_failed`. The same shape as Dire Wolf's `LORAEVENTS`.
 * **tx** for every frame sent: class, bytes on air, whether the radio reported success.
 * **status** once a minute: uptime, frames received per class, dropped / unparsable / CRC-failed counts, and the **noise floor** (power-averaged idle-channel RSSI,
-  one sample a second, min and max). The noise floor is skipped while transmitting, with CAD on, or in an eco mode; `rx_gain` is not sent (the SX127x has no switchable gain).
+  one sample a second, min and max). The noise floor is skipped while transmitting or in an eco mode (CAD does not matter); `rx_gain` is not sent (the SX127x has no switchable gain).
 
