@@ -139,7 +139,8 @@ namespace WIFI_Utils {
 
     void setup() {
         if (Config.digi.ecoMode == 0) startWiFi();
-        btStop();
+        // btStop() removed: nothing here uses Bluetooth, and merely referencing btStop() makes the Arduino core link its Bluetooth support and keep the
+        // controller's memory reserved (measured by F4MLV on a TTGO LoRa32 V2.1: about 128 KB of flash and 71 KB of heap, moricef/LoRa_APRS_Tracker issue 7, comment 3).
     }
 
 }
