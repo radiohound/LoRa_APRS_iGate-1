@@ -15,6 +15,7 @@ static int check_private() {
 }
 
 int main(int argc, char** argv) {
+    (void)argv;
     if (argc > 1) return check_private();
     EventsFormat::Head h = { "a1b2c3d4", 1, 1793545200123LL, "K6ATV-14" };
     EventsFormat::Radio r = { 433775000, 125000, 12, 5 };

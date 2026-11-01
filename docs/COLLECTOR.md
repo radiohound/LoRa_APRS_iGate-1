@@ -2,7 +2,9 @@
 
 The MQTT section of the web page comes pre-filled for the LoRa APRS collector: server `mqtt.lora-aprs.org`, port 1884, topic `lora-aprs`.
 Switch MQTT on and save: the user `igate` and password `lora-aprs` are public and already filled in.
-(A unit that already has a saved configuration keeps its old MQTT values.)
+The pre-fill also reaches a unit that already has a saved configuration, as long as MQTT was **never set up** there: MQTT off and the server, user name and
+password all empty. The first boot of this firmware fills in the values above, saves, and restarts once. MQTT stays **off** until you switch it on.
+A unit where anyone entered a server (their own broker, for instance), a user name or a password keeps its settings untouched.
 
 * With that server the iGate sends **event lines** not the received packets: `lora-aprs/<callsign>/rx` for every frame heard, `/tx` for every
   frame sent, `/status` once a minute (frame counts per format, CRC errors, uptime). The fields are those of Dire Wolf's `LORAEVENTS`

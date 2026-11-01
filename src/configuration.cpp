@@ -19,6 +19,7 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include "configuration.h"
+#include "mqtt_defaults.h"
 #include "board_pinout.h"
 #include "display.h"
 
@@ -405,6 +406,15 @@ bool Configuration::readFile() {
         mqtt.password                   = data["mqtt"]["password"] | "lora-aprs";
         mqtt.port                       = data["mqtt"]["port"] | 1884;
         mqtt.beaconOverMqtt             = data["mqtt"]["beaconOverMqtt"] | false;
+        if (MqttDefaults::neverConfigured(mqtt.active, mqtt.server.c_str(), mqtt.username.c_str(), mqtt.password.c_str())) {
+            Serial.println("MQTT was never set up: pre-filling the collector defaults (MQTT stays off)");
+            mqtt.server     = MqttDefaults::SERVER;
+            mqtt.topic      = MqttDefaults::TOPIC;
+            mqtt.username   = MqttDefaults::USERNAME;
+            mqtt.password   = MqttDefaults::PASSWORD;
+            mqtt.port       = MqttDefaults::PORT;
+            needsRewrite    = true;
+        }
 
         if (data["ota"]["username"].isNull() ||
             data["ota"]["password"].isNull()) needsRewrite = true;
