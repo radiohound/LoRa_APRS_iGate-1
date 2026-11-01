@@ -95,8 +95,8 @@
         "active": false,
         "server": "mqtt.lora-aprs.org",
         "topic": "lora-aprs",
-        "username": "",
-        "password": "",
+        "username": "igate",
+        "password": "lora-aprs",
         "port": 1884,
         "beaconOverMqtt": false
     },

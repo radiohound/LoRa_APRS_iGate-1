@@ -401,8 +401,8 @@ bool Configuration::readFile() {
         mqtt.active                     = data["mqtt"]["active"] | false;
         mqtt.server                     = data["mqtt"]["server"] | "mqtt.lora-aprs.org";
         mqtt.topic                      = data["mqtt"]["topic"] | "lora-aprs";
-        mqtt.username                   = data["mqtt"]["username"] | "";
-        mqtt.password                   = data["mqtt"]["password"] | "";
+        mqtt.username                   = data["mqtt"]["username"] | "igate";
+        mqtt.password                   = data["mqtt"]["password"] | "lora-aprs";
         mqtt.port                       = data["mqtt"]["port"] | 1884;
         mqtt.beaconOverMqtt             = data["mqtt"]["beaconOverMqtt"] | false;
 
@@ -563,8 +563,8 @@ void Configuration::setDefaultValues() {
     mqtt.active                     = false;
     mqtt.server                     = "mqtt.lora-aprs.org";
     mqtt.topic                      = "lora-aprs";
-    mqtt.username                   = "";
-    mqtt.password                   = "";
+    mqtt.username                   = "igate";
+    mqtt.password                   = "lora-aprs";
     mqtt.port                       = 1884;
     mqtt.beaconOverMqtt             = false;
 

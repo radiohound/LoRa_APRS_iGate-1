@@ -38,7 +38,7 @@ PubSubClient    pubSub;
 namespace MQTT_Utils {
 
     // With the server set to the collector, this iGate sends event lines (rx, tx, status) under lora-aprs/<callsign>/ (port 1884, no TLS:
-    // the firmware has no room for it; that broker port takes write-only logins), for development statistics. With any other server the old behaviour stays: the received TNC2 text goes out as it is.
+    // the firmware has no room for it; that broker port has one shared, public, write-only login), for development statistics. With any other server the old behaviour stays: the received TNC2 text goes out as it is.
     static const char*      COLLECTOR_HOST      = "mqtt.lora-aprs.org";
     static const uint32_t   STATUS_EVERY_MS     = 60000;
     static const uint32_t   RETRY_EVERY_MS      = 15000;
@@ -157,8 +157,8 @@ namespace MQTT_Utils {
 
         bool connected = false;
         if (collector) {                                    // the broker lets a station write only under its own name, so the user name is the callsign
-            const String user = Config.mqtt.username.isEmpty() ? Config.callsign : Config.mqtt.username;
-            connected = pubSub.connect(Config.callsign.c_str(), user.c_str(), Config.mqtt.password.c_str());
+            const String user = Config.mqtt.username.isEmpty() ? String("igate") : Config.mqtt.username;
+            connected = pubSub.connect(Config.callsign.c_str(), user.c_str(), Config.mqtt.password.c_str());     // client id = callsign: the broker lets it write under lora-aprs/<client id>/
         } else if (!Config.mqtt.username.isEmpty()) {
             connected = pubSub.connect(Config.callsign.c_str(), Config.mqtt.username.c_str(), Config.mqtt.password.c_str());
         } else {
