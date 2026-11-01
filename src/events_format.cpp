@@ -226,7 +226,7 @@ namespace EventsFormat {
     std::string status(const Head& h, long uptimeS, const Counts& c, const Noise& n) {
         std::string o;
         putHead(o, "status", h);
-        putf(o, ",\"uptime_s\":%ld", uptimeS);
+        putf(o, ",\"uptime_s\":%ld,\"loop_max_ms\":%ld", uptimeS, c.loopMaxMs);
         if (n.samples > 0) putf(o, ",\"noise_floor\":{\"avg_dbm\":%.1f,\"min_dbm\":%d,\"max_dbm\":%d,\"samples\":%d}", n.avgDbm, n.minDbm, n.maxDbm, n.samples);
         else               o += ",\"noise_floor\":null";
         o += ",\"received\":{";

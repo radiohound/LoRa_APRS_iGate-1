@@ -19,6 +19,7 @@
 #include <WiFiClient.h>
 #include <PubSubClient.h>
 #include <sys/time.h>
+#include <atomic>
 #include "configuration.h"
 #include "station_utils.h"
 #include "events_format.h"
@@ -41,21 +42,33 @@ namespace MQTT_Utils {
     // the firmware has no room for it; that broker port has one shared, public, write-only login), for development statistics. With any other server the old behaviour stays: the received TNC2 text goes out as it is.
     static const char*      COLLECTOR_HOST      = "mqtt.lora-aprs.org";
     static const uint32_t   STATUS_EVERY_MS     = 60000;
-    static const uint32_t   RETRY_EVERY_MS      = 15000;
+    static const uint32_t   RETRY_FIRST_MS      = 15000;       // after a failed connect: wait this long, then twice as long each time, up to RETRY_MAX_MS
+    static const uint32_t   RETRY_MAX_MS        = 300000;
     static const int        BROKEN_PER_MIN      = 30;
 
     static String           bootId;
     static uint32_t         sequence            = 0;
     static uint32_t         lastStatus          = 0;
-    static uint32_t         lastTry             = 0;
+    static uint32_t         nextTry             = 0;           // earliest time of the next connect attempt
+    static uint32_t         retryDelayMs        = RETRY_FIRST_MS;
+    static std::atomic<bool> connecting(false);                    // the connect task is running: the main loop must not touch the MQTT client
+    static uint32_t         lastPass            = 0;
+    static uint32_t         loopMaxMs           = 0;               // longest main-loop pass in the current minute
+    static uint32_t         reportedLoopMaxMs   = 0;               // ... and in the last full minute (sent in the status line)
+    static uint32_t         lastLoopReport      = 0;
     static EventsFormat::Counts counts          = {};
 
     bool collectorMode() {
         return Config.mqtt.server.equalsIgnoreCase(COLLECTOR_HOST);
     }
 
+    // The client may be used only while no connect is in progress (the connect task owns it then), and only when it is connected.
+    static bool usable() {
+        return !connecting.load() && pubSub.connected();
+    }
+
     bool isConnected() {
-        return pubSub.connected();
+        return usable();
     }
 
     static bool makeHead(EventsFormat::Head& h) {
@@ -75,7 +88,8 @@ namespace MQTT_Utils {
 
     static void publishEvent(const char* kind, const std::string& json) {
         const String topic = Config.mqtt.topic + "/" + Config.callsign + "/" + kind;
-        if (!pubSub.publish(topic.c_str(), json.c_str())) Serial.println("Event not sent to MQTT (check connection or size)");
+        // A failed publish on a dead connection makes PubSubClient drop it (connected() turns false), and the main loop starts a new connect with back-off.
+        if (!pubSub.publish(topic.c_str(), json.c_str())) Serial.println(pubSub.connected() ? "Event not sent to MQTT (too big for the buffer)" : "Event not sent to MQTT (connection lost)");
     }
 
     static int rxFrameClass() {
@@ -87,7 +101,7 @@ namespace MQTT_Utils {
     static void publishRx(const String& packet) {
         const int cls = rxFrameClass();
         counts.received[cls]++;
-        if (!pubSub.connected()) return;
+        if (!usable()) return;
         EventsFormat::Head h;
         if (!makeHead(h)) return;
         const String tnc2 = packet.substring(3);
@@ -97,7 +111,7 @@ namespace MQTT_Utils {
     }
 
     void publishTx(int frameClass, int airBytes, bool ok) {
-        if (!collectorMode() || !pubSub.connected()) return;
+        if (!collectorMode() || !usable()) return;
         EventsFormat::Head h;
         if (!makeHead(h)) return;
         publishEvent("tx", EventsFormat::tx(h, radioNow(), frameClass, airBytes, ok));
@@ -107,7 +121,7 @@ namespace MQTT_Utils {
         if (outcome == EventsFormat::CRC_ERROR)                 counts.crcErrors++;
         else if (outcome == EventsFormat::DROPPED_NO_REFERENCE) counts.droppedNoReference++;
         else                                                    counts.parseFailed++;
-        if (!Config.mqtt.active || !collectorMode() || !pubSub.connected()) return;
+        if (!Config.mqtt.active || !collectorMode() || !usable()) return;
         if (outcome == EventsFormat::CRC_ERROR) {                       // a burst of collisions must not flood the broker
             static uint32_t windowStart = 0;
             static int      inWindow    = 0;
@@ -128,6 +142,7 @@ namespace MQTT_Utils {
         if (!makeHead(h)) return;
         EventsFormat::Noise noise = {};
         LoRa_Utils::takeNoiseFloor(noise);
+        counts.loopMaxMs = (long)reportedLoopMaxMs;
         publishEvent("status", EventsFormat::status(h, (long)(millis() / 1000), counts, noise));
     }
 
@@ -136,10 +151,7 @@ namespace MQTT_Utils {
             publishRx(packet);
             return;
         }
-        if (!pubSub.connected()) {
-            Serial.println("Can not send to MQTT because it is not connected");
-            return;
-        }
+        if (!usable()) return;                              // not connected (yet): the packet is simply not sent over MQTT
         const String cleanPacket    = packet.substring(3);
         const String sender         = cleanPacket.substring(0, cleanPacket.indexOf(">"));
         const String topic          = String(Config.mqtt.topic + "/" + sender);
@@ -161,53 +173,76 @@ namespace MQTT_Utils {
         STATION_Utils::addToOutputPacketBuffer(String(payload, length));
     }
 
-    void connect() {
-        if (pubSub.connected()) return;
-        if (Config.mqtt.server.isEmpty() || Config.mqtt.port <= 0) {
-            Serial.println("Connect to MQTT server KO because no host or port given");
-            return;
-        }
+    // Connecting is slow when something is wrong: a DNS lookup, a TCP connect that times out, and up to 15 s waiting for a broker that accepts the
+    // connection but never answers. It runs in its own task so the radio loop never waits for it; while the task runs, the main loop leaves
+    // the MQTT client alone (usable() is false). After a failure the next attempt waits 15 s, then 30, 60 ... up to 5 minutes.
+    static void connectTask(void*) {
         const bool collector = collectorMode();
-        if (collector) {                                    // do not try on every pass of the main loop
-            if (lastTry != 0 && millis() - lastTry < RETRY_EVERY_MS) return;
-            lastTry = millis();
-        }
-        pubSub.setServer(Config.mqtt.server.c_str(), Config.mqtt.port);
-        Serial.print("Trying to connect with MQTT Server: " + String(Config.mqtt.server) + " MqttServerPort: " + String(Config.mqtt.port));
+        const String server  = Config.mqtt.server;
+        const int    port    = Config.mqtt.port;
+        const String call    = Config.callsign;
+        const String user    = Config.mqtt.username;
+        const String pass    = Config.mqtt.password;
+        const String topic   = Config.mqtt.topic;
 
+        pubSub.setServer(server.c_str(), port);
+        Serial.println("MQTT: connecting to " + server + ":" + String(port) + " in the background");
         bool connected = false;
         if (collector) {                                    // the broker lets a station write only under its own name, so the user name is the callsign
-            const String user = Config.mqtt.username.isEmpty() ? String("igate") : Config.mqtt.username;
-            connected = pubSub.connect(Config.callsign.c_str(), user.c_str(), Config.mqtt.password.c_str());     // client id = callsign: the broker lets it write under lora-aprs/<client id>/
-        } else if (!Config.mqtt.username.isEmpty()) {
-            connected = pubSub.connect(Config.callsign.c_str(), Config.mqtt.username.c_str(), Config.mqtt.password.c_str());
+            connected = pubSub.connect(call.c_str(), (user.isEmpty() ? String("igate") : user).c_str(), pass.c_str());     // client id = callsign: it may write under lora-aprs/<client id>/
+        } else if (!user.isEmpty()) {
+            connected = pubSub.connect(call.c_str(), user.c_str(), pass.c_str());
         } else {
-            connected = pubSub.connect(Config.callsign.c_str());
+            connected = pubSub.connect(call.c_str());
         }
 
         if (connected) {
-            Serial.println(" -> Connected !");
+            mqttClient.setTimeout(2);                       // seconds: a write on a dead socket must not hold the main loop for long
+            retryDelayMs = RETRY_FIRST_MS;
+            Serial.println("Trying to connect with MQTT Server: " + server + " MqttServerPort: " + String(port) + " -> Connected !");
             if (collector) {
                 lastStatus = millis() - STATUS_EVERY_MS + 5000;     // first status line 5 seconds after connecting
-                return;                                             // nothing to subscribe to: stations may only write
+            } else {
+                const String subscribedTopic = topic + "/" + call + "/#";
+                if (!pubSub.subscribe(subscribedTopic.c_str())) Serial.println("Subscribed to MQTT Failed");
+                Serial.println("Subscribed to MQTT topic : " + subscribedTopic);
             }
-            const String subscribedTopic = Config.mqtt.topic + "/" + Config.callsign + "/#";
-            if (!pubSub.subscribe(subscribedTopic.c_str())) {
-                Serial.println("Subscribed to MQTT Failed");
-            }
-            Serial.print("Subscribed to MQTT topic : ");
-            Serial.println(subscribedTopic);
         } else {
-            Serial.println(" -> Not Connected (Retry in a few secs)");
+            nextTry = millis() + retryDelayMs;
+            Serial.println("Trying to connect with MQTT Server: " + server + " MqttServerPort: " + String(port) + " -> Not Connected (retry in " + String(retryDelayMs / 1000) + " s)");
+            retryDelayMs = retryDelayMs * 2 > RETRY_MAX_MS ? RETRY_MAX_MS : retryDelayMs * 2;
+        }
+        connecting.store(false);
+        vTaskDelete(nullptr);
+    }
+
+    void connect() {
+        if (connecting.load() || pubSub.connected()) return;
+        if (Config.mqtt.server.isEmpty() || Config.mqtt.port <= 0) return;     // nothing to connect to
+        if ((int32_t)(millis() - nextTry) < 0) return;                          // still waiting after a failure
+        connecting.store(true);
+        if (xTaskCreatePinnedToCore(connectTask, "mqttconn", 8192, nullptr, 1, nullptr, 0) != pdPASS) {
+            connecting.store(false);
+            nextTry = millis() + retryDelayMs;                                  // no memory for the task right now: try again later
+            Serial.println("MQTT: could not start the connect task, will retry");
         }
     }
 
     void loop() {
+        const uint32_t now = millis();
+        if (lastPass != 0 && now - lastPass > loopMaxMs) loopMaxMs = now - lastPass;     // the longest pass of the whole main loop, for the status line
+        lastPass = now;
         if (!Config.mqtt.active) return;
-        if (!pubSub.connected()) return;
+        if (collectorMode() && now - lastLoopReport >= STATUS_EVERY_MS) {
+            lastLoopReport = now;
+            reportedLoopMaxMs = loopMaxMs;
+            loopMaxMs = 0;
+            Serial.println("Main loop: longest pass in the last minute " + String(reportedLoopMaxMs) + " ms");
+        }
+        if (!usable()) return;
         pubSub.loop();
-        if (collectorMode() && millis() - lastStatus >= STATUS_EVERY_MS) {
-            lastStatus = millis();
+        if (collectorMode() && now - lastStatus >= STATUS_EVERY_MS) {
+            lastStatus = now;
             publishStatus();
         }
     }
@@ -219,7 +254,7 @@ namespace MQTT_Utils {
             snprintf(id, sizeof id, "%08x", (unsigned)esp_random());
             bootId = id;
             pubSub.setClient(mqttClient);
-            pubSub.setBufferSize(1536);                     // an rx line is about 600 bytes; the library default is 256
+            pubSub.setBufferSize(3072);                     // an rx line is about 600 bytes, up to 2 KB for a long non-ASCII packet (every byte of 0x7F or more becomes 6); the library default is 256
             return;
         }
         pubSub.setClient(mqttClient);

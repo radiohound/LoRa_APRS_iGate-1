@@ -41,6 +41,7 @@ namespace EventsFormat {
         long droppedNoReference;
         long parseFailed;
         long crcErrors;
+        long loopMaxMs;             // the longest pass of the iGate's main loop in the last minute (a radio that is busy elsewhere cannot listen)
     };
 
     const char* className(int frameClass);
