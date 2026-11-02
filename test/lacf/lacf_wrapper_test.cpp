@@ -34,6 +34,10 @@ int main() {
         std::vector<uint8_t> frame = hexBytes(h); std::string back;
         EXPECT("reject", !HYBRID_FRAME::decode(frame.data(), frame.size(), back));
     }
+    for (const char* h : HB_NOENC) {                                   // packets that must not encode (non-compliant WIDE path, ':' in the source, no hybrid form)
+        std::string tnc2 = hexText(h); std::vector<uint8_t> f;
+        EXPECT("not encodable", !HYBRID_FRAME::encode(tnc2, f));
+    }
     // non-compliant WIDE paths are dropped: not encoded, and pathOk says no
     const char* bad[] = { "N0CALL>APLRG1,WIDE1-2:>x", "N0CALL>APLRG1,WIDE2-3:>x", "N0CALL>APLRG1,WIDE8-1:>x", "N0CALL>APLRG1,WIDE1-0:>x" };
     for (const char* p : bad) { std::vector<uint8_t> f; EXPECT("bad path not encoded", !HYBRID_FRAME::encode(p, f)); EXPECT("bad path", !HYBRID_FRAME::pathOk(p)); }
