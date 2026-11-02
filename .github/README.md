@@ -39,4 +39,6 @@ unless its maintainer says a pull request would be welcome.**
 * [The over-the-air test log and checklist](https://github.com/radiohound/aprs-compression-proposal/blob/main/docs/over-the-air-test.md)
 * Questions, results and problems: please open an [issue on this fork](https://github.com/radiohound/LoRa_APRS_iGate/issues).
 
+Credit: the current format, LACF, is developed together with Fabrice Morel, F4MLV (moricef), combining his native LoRa APRS frame and code with the PPM compression; see [docs/LACF.md](../docs/LACF.md).
+
 Licence: GPL-3.0, as in the original project.

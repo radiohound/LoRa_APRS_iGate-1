@@ -1,10 +1,12 @@
 # LACF, the LoRa APRS Compact Frame (experimental)
 
 LACF is the native frame `3C FF 02` with a PPM-coded content field, as written down in spec 11 of the APRS-PPM proposal
-(`radiohound/aprs-compression-proposal`, a draft, not agreed with the people who maintain the native frame). The frame code in
+(`radiohound/aprs-compression-proposal`, a draft in early development and still being reviewed for change). The frame code in
 `lib/HybridFrame` is the C reference of that spec, unchanged; `hybrid_frame.cpp` is the glue.
 
 The same format runs on the T-Deck tracker (branch `hybrid` of the tracker fork) and Dire Wolf (branch `feature/lora-hybrid`).
+
+**Credit.** LACF is developed together with Fabrice Morel, F4MLV (moricef): it combines his native LoRa APRS frame and code with K6ATV's PPM compression, and the two are working on it together (issue 7 of moricef/LoRa_APRS_Tracker). RXT was created by Jon, N7UV. This firmware is a fork of Ricardo Guzman's (CA2RXU) LoRa APRS iGate.
 
 ## The setting
 
@@ -49,7 +51,7 @@ Both `ttgo-lora32-v21` and `ESP32C3_DIY_1W_LoRa_915_E22_900M30S` build.
 
 Flashed to a LoRa32 V2.1 and used on the air: the iGate sends and receives LACF frames next to ordinary LoRa APRS frames, and the T-Deck tracker and the Dire Wolf
 station on the hill (both on the `hybrid` code) decode its frames and it decodes theirs. The browser **Update** on the published firmware page was tested on this board
-and keeps the settings. LACF is still an experimental proposal, not agreed with the people who maintain the native frame; see the firmware page for how to try it.
+and keeps the settings. LACF is still an experimental draft in early development, being worked out together with F4MLV; see the firmware page for how to try it.
 
 ## Not done
 
