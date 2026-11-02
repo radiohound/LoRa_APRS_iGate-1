@@ -29,17 +29,29 @@ A path element shaped like `WIDEn-N` must follow the APRS rule (n 1 to 7, N 1 to
 
 ## Cost
 
-On a TTGO LoRa32 V2.1 the build uses 1,783,457 bytes of the 1,966,080-byte slot (90.7%). That fits because `btStop()` was removed from
-`wifi_utils.cpp`: nothing here uses Bluetooth, and the call alone makes the Arduino core link about 128 KB of Bluetooth support (measured by F4MLV, and
-here: 88.3% before, 81.8% after). The frame code runs in a task of its own with a 16 KB stack, created at the first use.
+The published build for the TTGO LoRa32 V2.1 (commit 88964d7) is 1,804,336 bytes of the 1,966,080-byte app slot (91.8%). Ricardo's `main` is 1,602,737 bytes (81.5%),
+so LACF, the MQTT feed and the other additions of this branch cost about 330 KB. That fits because `btStop()` was removed from `wifi_utils.cpp`: nothing here uses
+Bluetooth, and the call alone makes the Arduino core link about 128 KB of Bluetooth support (found by F4MLV; measured again on 1 November 2026 on `main`: 1,602,737
+bytes (81.5%) became 1,474,561 (75.0%), and RAM 17.2% became 16.0%). The frame code runs in a task of its own with a 16 KB stack, created at the first use.
 
 ## Tests
 
-`sh test/lacf/run.sh` builds the wrapper and the frame code on the host and checks them against 40 spec vectors, 35 frames with RXT tuples, 28 rejection
-vectors and the WIDE rule (277 checks). Both `ttgo-lora32-v21` and `ESP32C3_DIY_1W_LoRa_915_E22_900M30S` build.
+Host tests (no board needed):
+
+* `sh test/lacf/run.sh`: the wrapper and the frame code against 40 spec vectors, 35 frames with RXT tuples, 28 rejection vectors and the WIDE rule (277 checks).
+* `sh test/events/run.sh`: the collector event lines, including the RFONLY/NOGATE privacy rule.
+* `sh test/configstore/run.sh`: safe saving of the settings file (123 checks).
+* `sh test/mqttdefaults/run.sh`: the pre-filled collector settings (10 cases).
+
+Both `ttgo-lora32-v21` and `ESP32C3_DIY_1W_LoRa_915_E22_900M30S` build.
+
+## Status
+
+Flashed to a LoRa32 V2.1 and used on the air: the iGate sends and receives LACF frames next to ordinary LoRa APRS frames, and the T-Deck tracker and the Dire Wolf
+station on the hill (both on the `hybrid` code) decode its frames and it decodes theirs. The browser **Update** on the published firmware page was tested on this board
+and keeps the settings. LACF is still an experimental proposal, not agreed with the people who maintain the native frame; see the firmware page for how to try it.
 
 ## Not done
 
-* Not flashed to a board, and not tried on the air.
-* No RXT: the iGate does not add its own measurement when it digipeats an LACF frame.
-* No feed of frame information to a collector (planned as a separate, optional MQTT setting).
+* No RXT: the iGate does not add its own measurement when it digipeats an LACF frame, and an RXT block it receives is counted and not carried on.
+* Frames of kind 0 and 1 (plain text frames of the earlier drafts) are not handled; they are dropped.
