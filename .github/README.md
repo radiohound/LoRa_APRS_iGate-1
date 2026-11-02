@@ -34,7 +34,7 @@ unless its maintainer says a pull request would be welcome.**
 
 ## More
 
-* [A short illustrated summary (PDF)](https://github.com/radiohound/aprs-compression-proposal/blob/main/docs/brochure.pdf) and [questions and answers](https://github.com/radiohound/aprs-compression-proposal/blob/main/docs/faq.md)
+* [Questions and answers](https://github.com/radiohound/aprs-compression-proposal/blob/main/docs/faq.md)
 * [Format description, tests and results](https://github.com/radiohound/aprs-compression-proposal) (the proposal repository)
 * [The over-the-air test log and checklist](https://github.com/radiohound/aprs-compression-proposal/blob/main/docs/over-the-air-test.md)
 * Questions, results and problems: please open an [issue on this fork](https://github.com/radiohound/LoRa_APRS_iGate/issues).
